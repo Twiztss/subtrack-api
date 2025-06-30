@@ -45,7 +45,7 @@ app.use(cookieParser());
 app.use(errorHandler);
 app.set('trust proxy', true); 
 app.use(express.json());
-app.use(arcjetMiddleware);
+// app.use(arcjetMiddleware);
 
 // Router
 app.use('/', indexRouter);

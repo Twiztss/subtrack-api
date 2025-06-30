@@ -3,6 +3,8 @@ import { workflowClient } from "../config/upstash.js";
 import { QSTASH_TOKEN, SERVER_URL } from "../config/env.js";
 import dayjs from "dayjs";
 import { sendReminderEmail } from "../utils/send-email.js";
+import User from "../models/user.model.js";
+import { createFilterQuery } from "../utils/filter.js";
 
 export const createSubscription = async (req, res, next) => {
     try {
@@ -57,15 +59,26 @@ export const createSubscription = async (req, res, next) => {
 
 export const getUserSubscription = async (req, res, next) => {
     try {
+        
+        const { page, limit, sort, ...filters } = req.query;
+
         if (req.user.id !== req.params.id) {
             const error = new Error('Incorrect user credential!');
             error.statusCode = 401;
             throw error;
         }
         
-        const userSubscription = await Subscription.find({ user : req.params.id });
+        let query = createFilterQuery(filters);
+        query = {...query, user : req.params.id};
+
+        const n_page = parseInt(page) || 1;
+        const n_limit = parseInt(limit) || 10;
+        const skip = (n_page - 1) * n_limit;
+
+        const total = await Subscription.countDocuments(query);
+        const subscriptions = await Subscription.find(query).skip(skip).limit(n_limit);
         
-        if (!userSubscription) {
+        if (!subscriptions) {
             const error = new Error('No subscription has been created yet!');
             error.statusCode = 404;
             throw error; 
@@ -73,7 +86,11 @@ export const getUserSubscription = async (req, res, next) => {
 
         res.status(200).json({
             success : true,
-            data : userSubscription
+            total : total,
+            page : n_page,
+            limit : n_limit,
+            totalPages : Math.ceil(total / n_limit),
+            data : subscriptions
         });
     
     } catch (err) {
@@ -103,16 +120,30 @@ export const getSubscriptionDetail = async (req, res, next) => {
 };
 
 export const getSubscriptions = async (req, res, next) => {
-    try {
-        const subscriptions = await Subscription.find();
+     try {
+        const { page, limit, sort, ...filters } = req.query;
+
+        const query = createFilterQuery(filters);
+
+        const n_page = parseInt(page) || 1;
+        const n_limit = parseInt(limit) || 10;
+        const skip = (n_page - 1) * n_limit;
+
+        const total = await Subscription.countDocuments(query);
+        const subscriptions = await Subscription.find(query).skip(skip).limit(n_limit);
+
         res.status(200).json({
             success : true,
-            data : subscriptions,
+            total : total,
+            page : n_page,
+            limit : n_limit,
+            totalPages : Math.ceil(total / n_limit),
+            data : subscriptions
         });
-        
+
     } catch (err) {
-        next(err);
-    }    
+       next(err);
+    } 
 }
 
 export const cancelSubscription = async (req, res, next) => {
@@ -168,3 +199,58 @@ export const getRenewalSubscription = async (req, res, next) => {
         next(err);
     }
 };
+
+export const removeSubscription = async (req, res, next) => {
+    try {
+
+        const deleteResult = await Subscription.deleteOne({ _id : req.params.id });
+
+        if (deleteResult.deletedCount === 1) {
+            res.status(204).json({
+            success : true,
+            message : "The subscription has been deleted"
+            })
+        } else {
+            const error = new Error('Subscription Not Found');
+            error.statusCode = 404;
+            throw error;
+        }
+
+
+    } catch (err) {
+        next(err);
+    }
+}
+
+export const getSubscriptionSummary = async (req, res, next) => {
+    try {
+
+    } catch (err) {
+        next(err);
+    }
+
+    if (req.user.id !== req.params.id) {
+            const error = new Error('Incorrect user credential!');
+            error.statusCode = 401;
+            throw error;
+        }
+        
+    const userSubscription = await Subscription.find({ user : req.params.id });
+    
+    if (!userSubscription) {
+        const error = new Error('No subscription has been created yet!');
+        error.statusCode = 404;
+        throw error; 
+    }
+    
+    const numSubscription = userSubscription.length;
+    const totalCost = userSubscription.reduce((prev, cur) => prev + Number(cur.price), 0);
+    const maxCost = userSubscription.reduce((prev, cur) => {
+        return Number(cur.price) > Number(prev.price) ? cur : prev
+    });
+
+    res.status(200).send({
+        success :  true,
+        data : { numSubscription, totalCost, maxCost }
+    });
+}
