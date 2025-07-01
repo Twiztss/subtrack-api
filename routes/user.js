@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getUser, getUsers } from '../controllers/user.controller.js';
+import { editUser, getUser, getUsers, removeUser } from '../controllers/user.controller.js';
 import authorize from '../middlewares/auth.middleware.js';
 const router = Router();
 
@@ -9,20 +9,8 @@ router.get('/', getUsers);
 // GET user from specific id
 router.get('/:id', authorize, getUser);
 
-router.put('/:id', function(req, res, next) {
-  res.send({
-        title : 'PUT user',
-        message : '',
-        content : '',
-    });
-});
+router.put('/:id/edit', authorize, editUser);
 
-router.delete('/:id', function(req, res, next) {
-  res.send({
-        title : 'DELETE user',
-        message : '',
-        content : '',
-    });
-});
+router.delete('/:id/remove', removeUser);
 
 export default router;

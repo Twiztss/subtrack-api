@@ -254,3 +254,44 @@ export const getSubscriptionSummary = async (req, res, next) => {
         data : { numSubscription, totalCost, maxCost }
     });
 }
+
+export const editSubscription = async (req, res, next) => {
+    try {
+
+        let updateFields = {};
+
+        // Request body -> Update entry
+        for (let key in req.body) {
+            if (req.body[key] !== undefined) {
+                updateFields[key] = req.body[key];
+            }
+        }
+
+        // Optional: handle case where no valid fields are provided
+        if (Object.keys(updateFields).length === 0) {
+            const error = new Error('No valid fields provided for the edit.');
+            error.statusCode = 400
+            throw error; 
+        }
+
+        const updatedSubscription = await Subscription.findByIdAndUpdate(
+            req.params.id,
+            { $set : updateFields } ,
+            { new : true}
+        );
+
+        if (!updatedSubscription) {
+            const error = new Error('No subscription with that id!');
+            error.statusCode = 404;
+            throw error; 
+        }
+        
+        res.status(201).json({
+            success : true,
+            data : updatedSubscription
+        });
+
+    } catch (err) {
+        next(err);
+    }
+}
