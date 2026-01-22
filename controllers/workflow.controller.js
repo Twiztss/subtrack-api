@@ -52,10 +52,10 @@ const sleepUntilReminder = async (context, label, date) => {
 };
 
 const triggerReminder = async (context, label, subscription, days) => {
-    return await context.run(label, () => {
+    return await context.run(label, async () => {
         console.log(`Triggering ${label} reminder`);
         // Send email with dynamic daysLeft and label
-        sendReminderEmail({
+        await sendReminderEmail({
             to: subscription.user.email,
             userName : 'User',
             type: label,

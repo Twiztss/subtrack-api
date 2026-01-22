@@ -1,20 +1,26 @@
 export const createFilterQuery = (filters) => {
-    // Add query Object
     const query = {};
 
-    // Create search query if there's any 
-    if (Object.entries(filters > 0)) {
-        // Dynamically build query from req.query
+    if (Object.entries(filters).length > 0) {
         for (const [key, value] of Object.entries(filters)) {
             if (key === 'name') {
-                query[key] = { $regex: value, $options: 'i' }; // Case-insensitive partial match
-            } else if (key === 'limit') {
-                limit === Number(value);
+                query[key] = { $regex: value, $options: 'i' };
             } else {
-                query[key] = value; // Exact match for other fields
+                query[key] = value;
             }
         }
     }
 
     return query;
 }
+
+export const createSortQuery = (sort) => {
+    const sortQuery = {};
+    if (sort) {
+        const [field, order = 'asc'] = sort.split(':');  // Default to 'asc'
+        sortQuery[field] = order === 'desc' ? -1 : 1;    // Changed logic
+    } else {
+        sortQuery.createdAt = -1;  // Default: newest first
+    }
+    return sortQuery;
+} 

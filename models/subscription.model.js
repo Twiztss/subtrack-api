@@ -25,9 +25,9 @@ const subscriptionSchema = new mongoose.Schema({
         enum : ['daily', 'weekly', 'monthly', 'yearly'],
     },
     category : {
-        type : String,
+        type : mongoose.Schema.Types.ObjectId,
+        ref : 'Category',
         required : true,
-        enum : ['sports', 'news', 'entertainment', 'lifestyle', 'technology', 'finance', 'politics', 'other'],
     },
     payment : {
         type : String,

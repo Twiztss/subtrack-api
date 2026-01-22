@@ -1,30 +1,49 @@
 import Subscription from "../models/subscription.model.js";
 import { workflowClient } from "../config/upstash.js";
-import { QSTASH_TOKEN, SERVER_URL } from "../config/env.js";
+import { QSTASH_TOKEN, SERVER_URL, ENABLE_WORKFLOW } from "../config/env.js";
 import dayjs from "dayjs";
 import { sendReminderEmail } from "../utils/send-email.js";
-import User from "../models/user.model.js";
 import { createFilterQuery } from "../utils/filter.js";
+import Category from "../models/category.model.js";
 
 export const createSubscription = async (req, res, next) => {
     try {
+
+        const category_name = req.body.category;
+        let category = await Category.findOne({ name : category_name });
+        if (!category) {
+            const new_category = await Category.create({ name : category_name });
+            category = new_category;
+        }
+        
         const subscription = await Subscription.create({
             ...req.body,
             user : req.user._id,
+            category : category,
         });
         
-        // 1. Upstash workflow
-        const { workflowRunId } = await workflowClient.trigger({
-            token : QSTASH_TOKEN,
-            url : `${SERVER_URL}/api/v1/workflow/subscription/reminder`,
-            body : {
-                subscriptionId : subscription.id,
-            },
-            headers : {
-                'content-type' : 'application/json',
-            },
-            retries : 0,
-        });
+        // 1. Upstash workflow (conditionally triggered)
+        let workflowRunId = null;
+        const isWorkflowEnabled = ENABLE_WORKFLOW === 'true';
+        
+        if (isWorkflowEnabled) {
+            try {
+                const result = await workflowClient.trigger({
+                    url : `${SERVER_URL}/api/v1/workflow/subscription/reminder`,
+                    body : {
+                        subscriptionId : subscription.id,
+                    },
+                    retries : 0,
+                });
+                workflowRunId = result.workflowRunId;
+                console.log(`✅ Workflow triggered successfully: ${workflowRunId}`);
+            } catch (workflowError) {
+                console.error("⚠️ Failed to trigger workflow:", workflowError.message);
+                // Don't block subscription creation if workflow fails
+            }
+        } else {
+            console.log(`ℹ️ Workflow disabled - subscription created without automated reminders`);
+        }
 
         // 2. Send a confirmation email
         try {
@@ -49,7 +68,13 @@ export const createSubscription = async (req, res, next) => {
         // 4. Response status and data
         res.status(201).json({
             success : true,
-            data : { subscription, workflowRunId, reminderDate, tobeRenewed },
+            data : { 
+                subscription, 
+                workflowRunId, 
+                reminderDate, 
+                tobeRenewed,
+                workflowEnabled: isWorkflowEnabled 
+            },
         });
 
     } catch (err) {

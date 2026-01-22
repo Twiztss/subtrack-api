@@ -2,8 +2,9 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
-import { fileURLToPath } from 'url';
+// import { fileURLToPath } from 'url';
 import { PORT, NODE_ENV } from './config/env.js';
+import process from 'process';
 
 // Router Import
 import indexRouter from './routes/index.js';
@@ -11,24 +12,25 @@ import userRouter from './routes/user.js';
 import authRouter from './routes/auth.js';
 import subscriptionRouter from './routes/subscription.js'
 import workflowRouter from './routes/workflow.js';
+import categoryRouter from './routes/category.js';
 
 // Middlewares
 import connectToDatabase from './database/mongodb.js';
 import errorHandler from './middlewares/error.middleware.js';
-import arcjetMiddleware from './middlewares/arcjet.middleware.js';
+// import arcjetMiddleware from './middlewares/arcjet.middleware.js';
 
 // Apps
 const app = express();
 
 // Paths
-const __filename = fileURLToPath(import.meta.url);
+// const __filename = fileURLToPath(import.meta.url);
 
 // Logging Middleware
 if (NODE_ENV === 'development') { app.use(logger('dev')); }
 else if (NODE_ENV === 'production') { app.use(logger('combined')); }
 else { console.log('Logging is disabled in', NODE_ENV); }
 
-const isDev = NODE_ENV !== "production";
+// const isDev = NODE_ENV !== "production";
 
 // For logging
 if (process.env.NODE_ENV !== "production") {
@@ -55,6 +57,7 @@ app.use('/api/v1/user', userRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/subscription', subscriptionRouter);
 app.use('/api/v1/workflow', workflowRouter);
+app.use('/api/v1/category', categoryRouter);
 
 // Listen
 app.listen(PORT , async () => {
