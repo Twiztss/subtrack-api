@@ -2,7 +2,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
-// import { fileURLToPath } from 'url';
 import { PORT, NODE_ENV } from './config/env.js';
 import process from 'process';
 
@@ -15,56 +14,60 @@ import workflowRouter from './routes/workflow.js';
 import categoryRouter from './routes/category.js';
 
 // Middlewares
-import connectToDatabase from './database/mongodb.js';
 import errorHandler from './middlewares/error.middleware.js';
-// import arcjetMiddleware from './middlewares/arcjet.middleware.js';
 
-// Apps
-const app = express();
+/**
+ * Create and configure Express application
+ * This function is exported for testing purposes
+ */
+export function createApp() {
+  const app = express();
 
-// Paths
-// const __filename = fileURLToPath(import.meta.url);
+  // Logging Middleware
+  if (NODE_ENV === 'development') { app.use(logger('dev')); }
+  else if (NODE_ENV === 'production') { app.use(logger('combined')); }
+  else if (NODE_ENV !== 'test') { console.log('Logging is disabled in', NODE_ENV); }
 
-// Logging Middleware
-if (NODE_ENV === 'development') { app.use(logger('dev')); }
-else if (NODE_ENV === 'production') { app.use(logger('combined')); }
-else { console.log('Logging is disabled in', NODE_ENV); }
+  // For logging in non-production environments
+  if (process.env.NODE_ENV !== "production") {
+    app.use((req, res, next) => {
+      const spoofedIp = `203.0.113.${Math.floor(Math.random() * 100)}`;
+      req.headers["x-forwarded-for"] = spoofedIp;
+      next();
+    });
+  }
 
-// const isDev = NODE_ENV !== "production";
+  // Middleware
+  app.use(express.urlencoded({ extended: false }));
+  app.use(cookieParser());
+  app.use(errorHandler);
+  app.set('trust proxy', true); 
+  app.use(express.json());
 
-// For logging
-if (process.env.NODE_ENV !== "production") {
-  app.use((req, res, next) => {
-  const spoofedIp = `203.0.113.${Math.floor(Math.random() * 100)}`;
-  req.headers["x-forwarded-for"] = spoofedIp;
-  next();
-});
+  // Router
+  app.use('/', indexRouter);
+
+  // API Routes
+  app.use('/api/v1/user', userRouter);
+  app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/subscription', subscriptionRouter);
+  app.use('/api/v1/workflow', workflowRouter);
+  app.use('/api/v1/category', categoryRouter);
+
+  return app;
 }
 
-// Middleware
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(errorHandler);
-app.set('trust proxy', true); 
-app.use(express.json());
-// app.use(arcjetMiddleware);
+// Create app instance
+const app = createApp();
 
-// Router
-app.use('/', indexRouter);
-
-// API Routes
-app.use('/api/v1/user', userRouter);
-app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/subscription', subscriptionRouter);
-app.use('/api/v1/workflow', workflowRouter);
-app.use('/api/v1/category', categoryRouter);
-
-// Listen
-app.listen(PORT , async () => {
-    console.log( `Subscription Tracker running on https://localhost:${PORT}.`);
-
-    // Log the datbase
+// Only start server if not in test mode
+if (NODE_ENV !== 'test') {
+  const connectToDatabase = (await import('./database/mongodb.js')).default;
+  
+  app.listen(PORT, async () => {
+    console.log(`Subscription Tracker running on https://localhost:${PORT}.`);
     await connectToDatabase();
-})
+  });
+}
 
 export default app;
