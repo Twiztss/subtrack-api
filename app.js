@@ -37,22 +37,24 @@ export function createApp() {
     });
   }
 
-  // Middleware
   app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
-  app.use(errorHandler);
-  app.set('trust proxy', true); 
+  app.set('trust proxy', true);
   app.use(express.json());
 
-  // Router
   app.use('/', indexRouter);
-
-  // API Routes
   app.use('/api/v1/user', userRouter);
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/subscription', subscriptionRouter);
   app.use('/api/v1/workflow', workflowRouter);
   app.use('/api/v1/category', categoryRouter);
+
+  app.use((req, res, next) => {
+    const err = new Error('Not Found');
+    err.statusCode = 404;
+    next(err);
+  });
+  app.use(errorHandler);
 
   return app;
 }

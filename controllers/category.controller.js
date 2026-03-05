@@ -1,6 +1,7 @@
 import Category from "../models/category.model.js";
 import Subscription from "../models/subscription.model.js";
 import { createFilterQuery, createSortQuery } from "../utils/filter.js";
+import { success } from "../utils/response.js";
 
 export const getCategories = async (req, res, next) => {
     try {
@@ -17,13 +18,9 @@ export const getCategories = async (req, res, next) => {
             .sort(createSortQuery(sort))
             .skip(skip)
             .limit(n_limit);
-        res.status(200).json({
-            success : true,
-            total : total,
-            page : n_page,
-            limit : n_limit,
-            totalPages : Math.ceil(total / n_limit),
-            data : categories,
+        success(res, {
+            data: categories,
+            meta: { total, page: n_page, limit: n_limit, totalPages: Math.ceil(total / n_limit) },
         });
     } catch (err) {
         next(err);
@@ -49,7 +46,7 @@ export const createCategory = async (req, res, next) => {
 
         const newCategory = await Category.create({ name });
 
-        res.status(201).json({ success : true, data : newCategory });
+        success(res, { statusCode: 201, data: newCategory });
 
     } catch (err) { next(err); }
 }
@@ -68,12 +65,8 @@ export const getCategoryById = async (req, res, next) => {
             category: category
         });
 
-        res.status(200).json({ 
-            success : true, 
-            data : {
-                ...category.toObject(),
-                subscriptionCount
-            }
+        success(res, {
+            data: { ...category.toObject(), subscriptionCount },
         });
     } catch (err) { next(err); }
 }
@@ -112,7 +105,7 @@ export const updateCategory = async (req, res, next) => {
         category.name = name;
         const updatedCategory = await category.save();
         
-        res.status(200).json({ success : true, data : updatedCategory });
+        success(res, { data: updatedCategory });
     } catch (err) { next(err); }
 }
 
@@ -141,10 +134,9 @@ export const deleteCategory = async (req, res, next) => {
 
         const deletedCategory = await Category.findByIdAndDelete(id);
         
-        res.status(200).json({ 
-            success : true, 
+        success(res, {
             message: 'Category deleted successfully',
-            data : deletedCategory 
+            data: deletedCategory,
         });
     } catch (err) { next(err); }
 }

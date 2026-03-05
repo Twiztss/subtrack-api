@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 import { sendReminderEmail } from "../utils/send-email.js";
 import { createFilterQuery } from "../utils/filter.js";
 import Category from "../models/category.model.js";
+import { success } from "../utils/response.js";
 
 export const createSubscription = async (req, res, next) => {
     try {
@@ -65,15 +66,14 @@ export const createSubscription = async (req, res, next) => {
         const reminderDate = renewalDate.subtract(3, 'day');
         const tobeRenewed = reminderDate.isAfter(currentDate)
 
-        // 4. Response status and data
-        res.status(201).json({
-            success : true,
-            data : { 
-                subscription, 
-                workflowRunId, 
-                reminderDate, 
+        success(res, {
+            statusCode: 201,
+            data: {
+                subscription,
+                workflowRunId,
+                reminderDate,
                 tobeRenewed,
-                workflowEnabled: isWorkflowEnabled 
+                workflowEnabled: isWorkflowEnabled,
             },
         });
 
@@ -109,15 +109,11 @@ export const getUserSubscription = async (req, res, next) => {
             throw error; 
         }
 
-        res.status(200).json({
-            success : true,
-            total : total,
-            page : n_page,
-            limit : n_limit,
-            totalPages : Math.ceil(total / n_limit),
-            data : subscriptions
-        });
+        success(res, {
+            data: subscriptions,
+            meta: { total, page: n_page, limit: n_limit, totalPages: Math.ceil(total / n_limit) },
     
+        });
     } catch (err) {
         next(err);
     }
@@ -134,11 +130,7 @@ export const getSubscriptionDetail = async (req, res, next) => {
             throw error; 
         }
 
-        res.status(200).json({
-            success : true,
-            data : subscriptionDetail
-        })
-
+        success(res, { data: subscriptionDetail });
     } catch (err) {
         next(err);
     }
@@ -157,18 +149,14 @@ export const getSubscriptions = async (req, res, next) => {
         const total = await Subscription.countDocuments(query);
         const subscriptions = await Subscription.find(query).skip(skip).limit(n_limit);
 
-        res.status(200).json({
-            success : true,
-            total : total,
-            page : n_page,
-            limit : n_limit,
-            totalPages : Math.ceil(total / n_limit),
-            data : subscriptions
-        });
+        success(res, {
+            data: subscriptions,
+            meta: { total, page: n_page, limit: n_limit, totalPages: Math.ceil(total / n_limit) },
 
+        });
     } catch (err) {
-       next(err);
-    } 
+        next(err);
+    }
 }
 
 export const cancelSubscription = async (req, res, next) => {
@@ -186,12 +174,7 @@ export const cancelSubscription = async (req, res, next) => {
             throw error; 
         }
         
-        res.json({
-            success : true,
-            data : newSubscription,
-        })
-
-
+        success(res, { data: newSubscription });
     } catch (err) {
         next(err);
     }
@@ -215,11 +198,7 @@ export const getRenewalSubscription = async (req, res, next) => {
             return diffInDays <= 7;
         });
 
-        res.status(200).json({
-            success : true,
-            data : toRenew,
-        });
-
+        success(res, { data: toRenew });
     } catch (err) {
         next(err);
     }
@@ -231,10 +210,7 @@ export const removeSubscription = async (req, res, next) => {
         const deleteResult = await Subscription.deleteOne({ _id : req.params.id });
 
         if (deleteResult.deletedCount === 1) {
-            res.status(204).json({
-            success : true,
-            message : "The subscription has been deleted"
-            })
+            success(res, { message: 'The subscription has been deleted' });
         } else {
             const error = new Error('Subscription Not Found');
             error.statusCode = 404;
@@ -249,24 +225,25 @@ export const removeSubscription = async (req, res, next) => {
 
 export const getSubscriptionSummary = async (req, res, next) => {
     try {
-
-    } catch (err) {
-        next(err);
-    }
-
-    if (req.user.id !== req.params.id) {
+        if (req.user.id !== req.params.id) {
             const error = new Error('Incorrect user credential!');
             error.statusCode = 401;
             throw error;
         }
-        
-    const userSubscription = await Subscription.find({ user : req.params.id });
-    
-    if (!userSubscription) {
-        const error = new Error('No subscription has been created yet!');
-        error.statusCode = 404;
-        throw error; 
-    }
+        const userSubscription = await Subscription.find({ user: req.params.id });
+        if (!userSubscription?.length) {
+            const error = new Error('No subscription has been created yet!');
+            error.statusCode = 404;
+            throw error;
+        }
+        const numSubscription = userSubscription.length;
+        const totalCost = userSubscription.reduce((prev, cur) => prev + Number(cur.price), 0);
+        const maxCost = userSubscription.reduce((prev, cur) =>
+            Number(cur.price) > Number(prev.price) ? cur : prev
+        );
+        success(res, { data: { numSubscription, totalCost, maxCost } });
+    } catch (err) {
+        next(err);
     
     const numSubscription = userSubscription.length;
     const totalCost = userSubscription.reduce((prev, cur) => prev + Number(cur.price), 0);
@@ -278,6 +255,7 @@ export const getSubscriptionSummary = async (req, res, next) => {
         success :  true,
         data : { numSubscription, totalCost, maxCost }
     });
+    }
 }
 
 export const editSubscription = async (req, res, next) => {
@@ -311,11 +289,7 @@ export const editSubscription = async (req, res, next) => {
             throw error; 
         }
         
-        res.status(201).json({
-            success : true,
-            data : updatedSubscription
-        });
-
+        success(res, { statusCode: 200, data: updatedSubscription });
     } catch (err) {
         next(err);
     }

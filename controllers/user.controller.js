@@ -1,13 +1,11 @@
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
+import { success } from "../utils/response.js";
 
 export const getUsers = async (req, res, next) => {
     try {
         const users = await User.find();
-        res.status(200).json({
-            success : true,
-            data : users,
-        });
+        success(res, { data: users });
         
     } catch (err) {
         next(err);
@@ -24,10 +22,7 @@ export const getUser = async (req, res, next) => {
             throw error;
         }
 
-        res.status(200).json({
-            success : true,
-            data : user,
-        });
+        success(res, { data: user });
 
     } catch (err) {
         next(err);
@@ -70,10 +65,12 @@ export const editUser = async (req, res, next) => {
             updateFields.password = hashedPassword;
         }
 
+        // runValidators: true ensures schema constraints (minLength, maxLength, etc.)
+        // are enforced for update operations, which Mongoose skips by default.
         const updatedUser = await User.findByIdAndUpdate(
             req.params.id,
             { $set : updateFields},
-            { new : true }
+            { new : true, runValidators: true }
         );
 
         if (!updatedUser) {
@@ -82,10 +79,7 @@ export const editUser = async (req, res, next) => {
             throw error;
         }
     
-        res.status(200).json({
-            success : true,
-            data : updatedUser
-        });
+        success(res, { data: updatedUser });
 
     } catch (err) {
         next(err);
@@ -98,10 +92,7 @@ export const removeUser = async (req, res, next) => {
         const deleteResult = await User.deleteOne({ _id : req.params.id });
 
         if (deleteResult.deletedCount === 1) {
-            res.status(204).json({
-            success : true,
-            message : "The user has been deleted"
-            })
+            success(res, { message: 'The user has been deleted' });
         } else {
             const error = new Error('User Not Found');
             error.statusCode = 404;

@@ -1,10 +1,13 @@
 import { Router } from 'express';
+import { success } from '../utils/response.js';
+
 const router = Router();
 
-/* GET home page. */
-router.get('/', function(req, res, next) {
-  const { method, url } = req;
-  res.send(`This path gets the ${method} request from URL of ${url}.`);
+router.get('/', (req, res) => {
+  success(res, {
+    message: 'Subscription Tracker API',
+    data: { method: req.method, path: req.path },
+  });
 });
 
 export default router;
