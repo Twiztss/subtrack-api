@@ -259,6 +259,70 @@ GET /api/v1/subscription/user/:id/summary
 
 Returns a summary of the user's subscriptions including total count, total cost, and the most expensive subscription.
 
+#### Get User's Subscription Analytics
+
+```http
+GET /api/v1/subscription/user/:id/analytics
+```
+
+| Parameter | Type     | Description          |
+| :-------- | :------- | :------------------- |
+| `id`      | `string` | **Required.** User ID |
+
+Returns spending analytics computed from the user's **active** subscriptions only (cancelled and expired are excluded). All frequencies (`daily`, `weekly`, `monthly`, `yearly`) are normalised to a monthly equivalent before aggregation.
+
+**Response fields:**
+
+| Field                              | Type     | Description                                               |
+| :--------------------------------- | :------- | :-------------------------------------------------------- |
+| `monthlyBurnRate`                  | `number` | Total monthly cost across all active subscriptions        |
+| `yearlyBurnRate`                   | `number` | `monthlyBurnRate × 12`                                    |
+| `activeSubscriptionCount`          | `number` | Number of active subscriptions included in the totals     |
+| `categoryBreakdown`                | `array`  | Per-category spending, sorted by monthly cost (desc)      |
+| `categoryBreakdown[].category`     | `string` | Category name                                             |
+| `categoryBreakdown[].monthlyBurnRate` | `number` | Monthly cost for this category                         |
+| `categoryBreakdown[].yearlyBurnRate`  | `number` | Yearly cost for this category                          |
+| `categoryBreakdown[].subscriptionCount` | `number` | Number of active subscriptions in this category      |
+| `categoryBreakdown[].percentage`   | `number` | Share of total monthly spend (`0`–`100`, 2 decimal places) |
+
+**Frequency normalisation:**
+
+| Frequency | Monthly equivalent  |
+| :-------- | :------------------ |
+| `daily`   | price × 30          |
+| `weekly`  | price × (52 ÷ 12)   |
+| `monthly` | price               |
+| `yearly`  | price ÷ 12          |
+
+**Example response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "monthlyBurnRate": 45.50,
+    "yearlyBurnRate": 546.00,
+    "activeSubscriptionCount": 5,
+    "categoryBreakdown": [
+      {
+        "category": "streaming",
+        "monthlyBurnRate": 25.50,
+        "yearlyBurnRate": 306.00,
+        "subscriptionCount": 3,
+        "percentage": 56.04
+      },
+      {
+        "category": "saas",
+        "monthlyBurnRate": 20.00,
+        "yearlyBurnRate": 240.00,
+        "subscriptionCount": 2,
+        "percentage": 43.96
+      }
+    ]
+  }
+}
+```
+
 ---
 
 ### Categories

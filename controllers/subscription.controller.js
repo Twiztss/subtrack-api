@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Subscription from "../models/subscription.model.js";
 import { workflowClient } from "../config/upstash.js";
 import { QSTASH_TOKEN, SERVER_URL, ENABLE_WORKFLOW } from "../config/env.js";
@@ -257,6 +258,120 @@ export const getSubscriptionSummary = async (req, res, next) => {
     });
     }
 }
+
+export const getSubscriptionAnalytics = async (req, res, next) => {
+    try {
+        if (req.user.id !== req.params.id) {
+            const error = new Error('Incorrect user credential!');
+            error.statusCode = 401;
+            throw error;
+        }
+
+        const userId = new mongoose.Types.ObjectId(req.params.id);
+
+        const result = await Subscription.aggregate([
+            {
+                $match: {
+                    user: userId,
+                    payment: 'active',
+                },
+            },
+            {
+                $addFields: {
+                    priceAsDouble: { $toDouble: '$price' },
+                    monthlyPrice: {
+                        $switch: {
+                            branches: [
+                                {
+                                    case: { $eq: ['$frequency', 'daily'] },
+                                    then: { $multiply: [{ $toDouble: '$price' }, 30] },
+                                },
+                                {
+                                    case: { $eq: ['$frequency', 'weekly'] },
+                                    then: { $multiply: [{ $toDouble: '$price' }, { $divide: [52, 12] }] },
+                                },
+                                {
+                                    case: { $eq: ['$frequency', 'monthly'] },
+                                    then: { $toDouble: '$price' },
+                                },
+                                {
+                                    case: { $eq: ['$frequency', 'yearly'] },
+                                    then: { $divide: [{ $toDouble: '$price' }, 12] },
+                                },
+                            ],
+                            default: { $toDouble: '$price' },
+                        },
+                    },
+                },
+            },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'category',
+                    foreignField: '_id',
+                    as: 'categoryInfo',
+                },
+            },
+            {
+                $unwind: '$categoryInfo',
+            },
+            {
+                $facet: {
+                    totals: [
+                        {
+                            $group: {
+                                _id: null,
+                                monthlyBurnRate: { $sum: '$monthlyPrice' },
+                                activeSubscriptionCount: { $sum: 1 },
+                            },
+                        },
+                    ],
+                    categoryBreakdown: [
+                        {
+                            $group: {
+                                _id: '$categoryInfo.name',
+                                monthlyBurnRate: { $sum: '$monthlyPrice' },
+                                subscriptionCount: { $sum: 1 },
+                            },
+                        },
+                        { $sort: { monthlyBurnRate: -1 } },
+                    ],
+                },
+            },
+        ]);
+
+        const totals = result[0]?.totals[0] ?? { monthlyBurnRate: 0, activeSubscriptionCount: 0 };
+        const monthlyBurnRate = parseFloat(totals.monthlyBurnRate.toFixed(2));
+        const yearlyBurnRate = parseFloat((monthlyBurnRate * 12).toFixed(2));
+        const activeSubscriptionCount = totals.activeSubscriptionCount;
+
+        const categoryBreakdown = (result[0]?.categoryBreakdown ?? []).map((cat) => {
+            const catMonthly = parseFloat(cat.monthlyBurnRate.toFixed(2));
+            const catYearly = parseFloat((catMonthly * 12).toFixed(2));
+            const percentage = monthlyBurnRate > 0
+                ? parseFloat(((catMonthly / monthlyBurnRate) * 100).toFixed(2))
+                : 0;
+            return {
+                category: cat._id,
+                monthlyBurnRate: catMonthly,
+                yearlyBurnRate: catYearly,
+                subscriptionCount: cat.subscriptionCount,
+                percentage,
+            };
+        });
+
+        success(res, {
+            data: {
+                monthlyBurnRate,
+                yearlyBurnRate,
+                activeSubscriptionCount,
+                categoryBreakdown,
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
 
 export const editSubscription = async (req, res, next) => {
     try {
