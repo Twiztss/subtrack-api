@@ -7,6 +7,7 @@ import { sendReminderEmail } from "../utils/send-email.js";
 import { createFilterQuery } from "../utils/filter.js";
 import Category from "../models/category.model.js";
 import { success } from "../utils/response.js";
+import { convertCurrency, SUBSCRIPTION_CURRENCIES } from "../utils/currency.js";
 
 export const createSubscription = async (req, res, next) => {
     try {
@@ -404,6 +405,61 @@ export const editSubscription = async (req, res, next) => {
             throw error; 
         }
         
+        success(res, { statusCode: 200, data: updatedSubscription });
+    } catch (err) {
+        next(err);
+    }
+}
+
+export const updateSubscriptionCurrency = async (req, res, next) => {
+    try {
+        const targetCurrency = req.body?.currency;
+        if (targetCurrency == null || String(targetCurrency).trim() === '') {
+            const error = new Error('Target currency is required');
+            error.statusCode = 400;
+            throw error;
+        }
+        if (!SUBSCRIPTION_CURRENCIES.includes(targetCurrency)) {
+            const error = new Error(
+                `Currency must be one of: ${SUBSCRIPTION_CURRENCIES.join(', ')}`
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const subscription = await Subscription.findById(req.params.id);
+        if (!subscription) {
+            const error = new Error('No subscription with that id!');
+            error.statusCode = 404;
+            throw error;
+        }
+        if (subscription.user.toString() !== req.user.id) {
+            const error = new Error('Incorrect user credential!');
+            error.statusCode = 401;
+            throw error;
+        }
+
+        const fromCurrency = subscription.currency || 'USD';
+        const numericPrice = Number.parseFloat(String(subscription.price).trim());
+        if (!Number.isFinite(numericPrice)) {
+            const error = new Error('Subscription price is not a valid number');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const converted = await convertCurrency(
+            numericPrice,
+            fromCurrency,
+            targetCurrency
+        );
+        const priceString = converted.toFixed(2);
+
+        const updatedSubscription = await Subscription.findByIdAndUpdate(
+            req.params.id,
+            { $set : { currency : targetCurrency, price : priceString } },
+            { new : true, runValidators : true }
+        );
+
         success(res, { statusCode: 200, data: updatedSubscription });
     } catch (err) {
         next(err);

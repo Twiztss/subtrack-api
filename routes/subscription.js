@@ -1,6 +1,6 @@
 import { Router } from "express";
 import authorize from "../middlewares/auth.middleware.js";
-import { cancelSubscription, createSubscription, editSubscription, getSubscriptionAnalytics, getRenewalSubscription, getSubscriptionDetail, getSubscriptions, getSubscriptionSummary, getUserSubscription, removeSubscription } from "../controllers/subscription.controller.js";
+import { cancelSubscription, createSubscription, editSubscription, getSubscriptionAnalytics, getRenewalSubscription, getSubscriptionDetail, getSubscriptions, getSubscriptionSummary, getUserSubscription, removeSubscription, updateSubscriptionCurrency } from "../controllers/subscription.controller.js";
 import { success } from "../utils/response.js";
 
 const router = Router();
@@ -30,6 +30,8 @@ router.get('/user/:id/analytics', authorize, getSubscriptionAnalytics);
 router.get('/user/:id', authorize, getUserSubscription);
 
 router.put('/:id', authorize, editSubscription);
+
+router.put('/:id/convert', authorize, updateSubscriptionCurrency);
     
 router.put('/:id/cancel', authorize, cancelSubscription);
 
