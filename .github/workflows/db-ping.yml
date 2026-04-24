@@ -12,9 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DB_URI: ${{ secrets.DB_URI }}
-      ATLAS_PUBLIC_KEY: ${{ secrets.MONGODB_ATLAS_PUBLIC_API_KEY }}
-      ATLAS_PRIVATE_KEY: ${{ secrets.MONGODB_ATLAS_PRIVATE_API_KEY }}
-      ATLAS_PROJECT_ID: ${{ secrets.MONGODB_ATLAS_PROJECT_ID }}
+      MONGODB_ATLAS_PUBLIC_API_KEY: ${{ secrets.MONGODB_ATLAS_PUBLIC_API_KEY }}
+      MONGODB_ATLAS_PRIVATE_API_KEY: ${{ secrets.MONGODB_ATLAS_PRIVATE_API_KEY }}
+      MONGODB_ATLAS_PROJECT_ID: ${{ secrets.MONGODB_ATLAS_PROJECT_ID }}
 
     steps:
       - name: Checkout repository
@@ -29,11 +29,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Atlas CLI
-        run: |
-          curl -fsSL https://fastdl.mongodb.org/mongocli/mongodb-atlas-cli_latest_linux_x86_64.tar.gz \
-            | tar -xz --wildcards --strip-components=2 '*/bin/atlas'
-          sudo mv atlas /usr/local/bin/
+      - name: Setup Atlas CLI
+        uses: mongodb/atlas-github-action@v0.2.0
 
       - name: Whitelist runner IP
         run: |
@@ -41,10 +38,7 @@ jobs:
           echo "RUNNER_IP=$RUNNER_IP" >> $GITHUB_ENV
           atlas accessLists create "$RUNNER_IP" \
             --type ipAddress \
-            --projectId "$ATLAS_PROJECT_ID" \
-            --comment "github-actions-cron-runner" \
-            --publicApiKey "$ATLAS_PUBLIC_KEY" \
-            --privateApiKey "$ATLAS_PRIVATE_KEY"
+            --comment "github-actions-cron-runner"
           echo "Whitelisted $RUNNER_IP — waiting for propagation..."
           sleep 10
 
@@ -53,9 +47,4 @@ jobs:
 
       - name: Remove runner IP from whitelist
         if: always()
-        run: |
-          atlas accessLists delete "$RUNNER_IP" \
-            --projectId "$ATLAS_PROJECT_ID" \
-            --publicApiKey "$ATLAS_PUBLIC_KEY" \
-            --privateApiKey "$ATLAS_PRIVATE_KEY" \
-            --force
+        run: atlas accessLists delete "$RUNNER_IP" --force
