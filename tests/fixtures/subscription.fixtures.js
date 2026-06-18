@@ -3,6 +3,10 @@
  * Contains reusable test data, mock objects, and helper functions
  */
 
+// Use dynamic dates so subscriptions are never auto-expired by the pre-save hook
+const startDate = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);   // 30 days ago
+const renewalDate = () => new Date(Date.now() + 335 * 24 * 60 * 60 * 1000); // ~11 months ahead
+
 /**
  * Factory function to create valid subscription data
  * @param {Object} overrides - Properties to override default values
@@ -13,8 +17,8 @@ export const createSubscriptionData = (overrides = {}) => ({
   price: '9.99',
   category: 'entertainment',
   frequency: 'monthly',
-  startDate: new Date('2026-02-01'),
-  renewalDate: new Date('2026-03-15'),
+  startDate: startDate(),
+  renewalDate: renewalDate(),
   currency: 'USD',
   ...overrides,
 });
@@ -32,8 +36,8 @@ export const createMultipleSubscriptions = (count, baseData = {}) => {
       name: `Subscription ${i}`,
       price: `${i}.99`,
       frequency: 'monthly',
-      startDate: new Date('2026-02-01'),
-      renewalDate: new Date('2026-03-01'),
+      startDate: startDate(),
+      renewalDate: renewalDate(),
       ...baseData,
     });
   }
@@ -87,22 +91,22 @@ export const commonSubscriptions = {
     name: 'Spotify',
     price: '9.99',
     frequency: 'monthly',
-    startDate: new Date('2026-02-01'),
-    renewalDate: new Date('2026-03-15'),
+    startDate: startDate(),
+    renewalDate: renewalDate(),
   },
   netflix: {
     name: 'Netflix',
     price: '15.99',
     frequency: 'monthly',
-    startDate: new Date('2026-02-01'),
-    renewalDate: new Date('2026-03-01'),
+    startDate: startDate(),
+    renewalDate: renewalDate(),
   },
   disneyPlus: {
     name: 'Disney+',
     price: '7.99',
     frequency: 'monthly',
-    startDate: new Date('2026-02-01'),
-    renewalDate: new Date('2026-03-01'),
+    startDate: startDate(),
+    renewalDate: renewalDate(),
   },
 };
 

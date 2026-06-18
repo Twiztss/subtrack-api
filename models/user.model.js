@@ -1,4 +1,4 @@
-import mongoose, { model } from "mongoose";
+import mongoose from "mongoose";
 
 // Create Schema object for storing user data in JSON
 const userSchema = new mongoose.Schema({
@@ -22,7 +22,8 @@ const userSchema = new mongoose.Schema({
    password : {
     type : String,
     required : [true, 'User password is required!'],
-    minLength : 6, 
+    minLength : 6,
+    select : false,
    },
 }, { timestamps : true } );
 

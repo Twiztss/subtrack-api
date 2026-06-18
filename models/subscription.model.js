@@ -59,6 +59,11 @@ const subscriptionSchema = new mongoose.Schema({
     },
 }, { timestamps : true });
 
+// Compound indexes for common query patterns
+subscriptionSchema.index({ user: 1, payment: 1 });
+subscriptionSchema.index({ user: 1, renewalDate: 1 });
+subscriptionSchema.index({ user: 1, category: 1 });
+
 subscriptionSchema.pre('save', function (next) {
     if (!this.renewalDate) {
         const renewalPeriods = {
@@ -76,7 +81,7 @@ subscriptionSchema.pre('save', function (next) {
     }
 
     if (this.renewalDate < new Date()) {
-        this.status = 'expired';
+        this.payment = 'expired';
     }
 
     next();

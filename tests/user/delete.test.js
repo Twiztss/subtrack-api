@@ -3,13 +3,14 @@
  * Tests for removing user documents through the HTTP endpoint
  *
  * Coverage:
- *   - Smoke testing  : successful deletion, confirmation message
+ *   - Smoke testing  : successful self-deletion, confirmation message
  *   - DB integration : document absent after deletion, other documents unaffected
- *   - Error handling : non-existent ID, invalid ObjectId format
+ *   - Error handling : non-existent ID (403 – ownership mismatch), invalid ObjectId,
+ *                      missing/invalid token, attempt to delete another user (403)
  *   - Boundary tests : deleting the only extra user, testUser isolation
  *
- * Note: this endpoint does NOT require an authorization token (no `authorize`
- * middleware in routes/user.js), so auth-error scenarios are not tested here.
+ * Security model: users may only delete their own account (self-delete only).
+ * Each test that performs a successful delete creates a dedicated user + token.
  */
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
@@ -22,6 +23,7 @@ import {
   teardownTests,
   cleanupExtraUsers,
   createTestUser,
+  createAuthenticatedUser,
   testContext,
 } from '../helpers/user.setup.js';
 import { createUserData, commonUsers } from '../fixtures/user.fixtures.js';
@@ -45,13 +47,16 @@ describe('DELETE /api/v1/user/:id/remove - Remove User', () => {
 
   // ── Smoke Tests ────────────────────────────────────────────────────────────
 
-  it('should delete an existing user and return 200 with a confirmation message', async () => {
-    // Arrange: a dedicated user to delete; testContext.testUser is left intact
-    const targetUser = await createTestUser(createUserData({ email: 'deleteme@example.com' }));
+  it('should allow a user to delete their own account and return 200', async () => {
+    // Arrange: create a dedicated user with its own auth token
+    const { user: targetUser, token: targetToken } = await createAuthenticatedUser(
+      createUserData({ email: 'deleteme@example.com' })
+    );
 
     // Act
     const response = await request(app)
       .delete(`/api/v1/user/${targetUser._id}/remove`)
+      .set('Authorization', `Bearer ${targetToken}`)
       .expect('Content-Type', /json/)
       .expect(200);
 
@@ -64,12 +69,15 @@ describe('DELETE /api/v1/user/:id/remove - Remove User', () => {
 
   it('should remove the user document from the database after deletion', async () => {
     // Arrange
-    const targetUser = await createTestUser(createUserData({ email: 'gone@example.com' }));
+    const { user: targetUser, token: targetToken } = await createAuthenticatedUser(
+      createUserData({ email: 'gone@example.com' })
+    );
     const userId = targetUser._id;
 
     // Act
     await request(app)
       .delete(`/api/v1/user/${userId}/remove`)
+      .set('Authorization', `Bearer ${targetToken}`)
       .expect(200);
 
     // Assert: the document no longer exists in the collection
@@ -78,13 +86,16 @@ describe('DELETE /api/v1/user/:id/remove - Remove User', () => {
   });
 
   it('should not affect other user documents when deleting one specific user', async () => {
-    // Arrange: two extra users; only the first will be deleted
-    const userToDelete = await createTestUser(createUserData({ email: 'delete.only@example.com' }));
+    // Arrange: two extra users; only the first deletes itself
+    const { user: userToDelete, token: deleteToken } = await createAuthenticatedUser(
+      createUserData({ email: 'delete.only@example.com' })
+    );
     const userToKeep = await createTestUser(createUserData({ email: 'keep.me@example.com' }));
 
-    // Act: delete only the first user
+    // Act: self-delete the first user
     await request(app)
       .delete(`/api/v1/user/${userToDelete._id}/remove`)
+      .set('Authorization', `Bearer ${deleteToken}`)
       .expect(200);
 
     // Assert: the second user is still present and unmodified
@@ -95,7 +106,9 @@ describe('DELETE /api/v1/user/:id/remove - Remove User', () => {
 
   it('should reflect the deletion immediately in the database (no stale reads)', async () => {
     // Arrange
-    const targetUser = await createTestUser(createUserData({ email: 'immediate@example.com' }));
+    const { user: targetUser, token: targetToken } = await createAuthenticatedUser(
+      createUserData({ email: 'immediate@example.com' })
+    );
 
     // Confirm user exists before delete
     const before = await User.findById(targetUser._id);
@@ -104,6 +117,7 @@ describe('DELETE /api/v1/user/:id/remove - Remove User', () => {
     // Act
     await request(app)
       .delete(`/api/v1/user/${targetUser._id}/remove`)
+      .set('Authorization', `Bearer ${targetToken}`)
       .expect(200);
 
     // Assert: immediate subsequent query returns null
@@ -113,57 +127,62 @@ describe('DELETE /api/v1/user/:id/remove - Remove User', () => {
 
   // ── Error Handling ─────────────────────────────────────────────────────────
 
-  it('should return 404 when the user ID does not exist in the database', async () => {
-    // A valid ObjectId that is not present in the collection
-    const nonExistentId = new mongoose.Types.ObjectId();
+  it('should return 403 when a user attempts to delete a different user', async () => {
+    // Arrange: create a second user as the target
+    const otherUser = await createTestUser(commonUsers.alice);
 
+    // Act: testContext.testUser tries to delete otherUser
     const response = await request(app)
-      .delete(`/api/v1/user/${nonExistentId}/remove`)
+      .delete(`/api/v1/user/${otherUser._id}/remove`)
+      .set('Authorization', `Bearer ${testContext.authToken}`)
       .expect('Content-Type', /json/)
-      .expect(404);
+      .expect(403);
 
     expect(response.body.success).toBe(false);
-    // The controller throws 'User Not Found' (capitalised) for this case
-    expect(response.body.message).toMatch(/not found/i);
+    expect(response.body.message).toMatch(/unauthorized/i);
   });
 
-  it('should return 404 when the user ID is not a valid ObjectId format', async () => {
-    // Mongoose throws a CastError for malformed IDs;
-    // the error middleware maps CastError → 404
+  it('should return 401 when no authorization token is provided', async () => {
+    const response = await request(app)
+      .delete(`/api/v1/user/${testContext.testUser._id}/remove`)
+      .expect('Content-Type', /json/)
+      .expect(401);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  it('should return 401 when an invalid token is provided', async () => {
+    const response = await request(app)
+      .delete(`/api/v1/user/${testContext.testUser._id}/remove`)
+      .set('Authorization', 'Bearer totally-wrong-token')
+      .expect('Content-Type', /json/)
+      .expect(401);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  it('should return 403 when the user ID is not a valid ObjectId format', async () => {
+    // The ownership check (req.user.id !== req.params.id) fires before Mongoose
+    // ever processes the malformed ID, so the response is 403 Forbidden, not 404.
     const response = await request(app)
       .delete('/api/v1/user/not-an-object-id/remove')
+      .set('Authorization', `Bearer ${testContext.authToken}`)
       .expect('Content-Type', /json/)
-      .expect(404);
+      .expect(403);
 
     expect(response.body.success).toBe(false);
-  });
-
-  it('should not decrement the user count when the ID does not exist', async () => {
-    // Arrange: note the current user count
-    const countBefore = await User.countDocuments();
-    const nonExistentId = new mongoose.Types.ObjectId();
-
-    // Act: attempt a no-op delete
-    await request(app)
-      .delete(`/api/v1/user/${nonExistentId}/remove`)
-      .expect(404);
-
-    // Assert: collection size is unchanged
-    const countAfter = await User.countDocuments();
-    expect(countAfter).toBe(countBefore);
   });
 
   // ── Boundary Tests ─────────────────────────────────────────────────────────
 
-  it('should leave testContext.testUser untouched after deleting all extra users', async () => {
-    // Arrange: three extra users
-    await createTestUser(commonUsers.alice);
-    await createTestUser(commonUsers.bob);
-    const lastExtra = await createTestUser(commonUsers.charlie);
+  it('should leave testContext.testUser untouched after deleting an extra user', async () => {
+    // Arrange
+    const { user: extra, token: extraToken } = await createAuthenticatedUser(commonUsers.alice);
 
-    // Act: delete the last extra user via the API
+    // Act: extra user deletes itself
     await request(app)
-      .delete(`/api/v1/user/${lastExtra._id}/remove`)
+      .delete(`/api/v1/user/${extra._id}/remove`)
+      .set('Authorization', `Bearer ${extraToken}`)
       .expect(200);
 
     // Assert: baseline test user is still present and unchanged
@@ -173,12 +192,15 @@ describe('DELETE /api/v1/user/:id/remove - Remove User', () => {
   });
 
   it('should delete a just-created user without any issues (immediate delete)', async () => {
-    // Arrange: create and then immediately attempt deletion
-    const freshUser = await createTestUser(createUserData({ email: 'instant.delete@example.com' }));
+    // Arrange: create and immediately attempt deletion
+    const { user: freshUser, token: freshToken } = await createAuthenticatedUser(
+      createUserData({ email: 'instant.delete@example.com' })
+    );
 
     // Act
     const response = await request(app)
       .delete(`/api/v1/user/${freshUser._id}/remove`)
+      .set('Authorization', `Bearer ${freshToken}`)
       .expect(200);
 
     // Assert

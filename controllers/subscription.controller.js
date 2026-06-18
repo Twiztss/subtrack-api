@@ -5,6 +5,8 @@ import { QSTASH_TOKEN, SERVER_URL, ENABLE_WORKFLOW } from "../config/env.js";
 import dayjs from "dayjs";
 import { sendReminderEmail } from "../utils/send-email.js";
 import { createFilterQuery } from "../utils/filter.js";
+import { parsePagination } from "../utils/pagination.js";
+import { createSortQuery } from "../utils/filter.js";
 import Category from "../models/category.model.js";
 import { success } from "../utils/response.js";
 import { convertCurrency, SUBSCRIPTION_CURRENCIES } from "../utils/currency.js";
@@ -12,17 +14,28 @@ import { convertCurrency, SUBSCRIPTION_CURRENCIES } from "../utils/currency.js";
 export const createSubscription = async (req, res, next) => {
     try {
 
-        const category_name = req.body.category;
+        const category_name = String(req.body.category || '').toLowerCase().trim();
+        if (!category_name) {
+            const error = new Error('Category is required');
+            error.statusCode = 400;
+            throw error;
+        }
         let category = await Category.findOne({ name : category_name });
         if (!category) {
-            const new_category = await Category.create({ name : category_name });
-            category = new_category;
+            category = await Category.create({ name : category_name });
         }
         
+        const { name, price, currency, frequency, payment, startDate, renewalDate: inputRenewalDate } = req.body;
         const subscription = await Subscription.create({
-            ...req.body,
+            name,
+            price,
+            currency,
+            frequency,
+            payment,
+            startDate,
+            renewalDate: inputRenewalDate,
             user : req.user._id,
-            category : category,
+            category,
         });
         
         // 1. Upstash workflow (conditionally triggered)
@@ -86,35 +99,25 @@ export const createSubscription = async (req, res, next) => {
 
 export const getUserSubscription = async (req, res, next) => {
     try {
-        
-        const { page, limit, sort, ...filters } = req.query;
-
         if (req.user.id !== req.params.id) {
             const error = new Error('Incorrect user credential!');
-            error.statusCode = 401;
+            error.statusCode = 403;
             throw error;
         }
-        
-        let query = createFilterQuery(filters);
-        query = {...query, user : req.params.id};
 
-        const n_page = parseInt(page) || 1;
-        const n_limit = parseInt(limit) || 10;
-        const skip = (n_page - 1) * n_limit;
+        const { page, limit, sort, ...filters } = req.query;
+        const query = { ...createFilterQuery(filters), user: req.params.id };
+        const { n_page, n_limit, skip } = parsePagination({ page, limit });
 
         const total = await Subscription.countDocuments(query);
-        const subscriptions = await Subscription.find(query).skip(skip).limit(n_limit);
-        
-        if (!subscriptions) {
-            const error = new Error('No subscription has been created yet!');
-            error.statusCode = 404;
-            throw error; 
-        }
+        const subscriptions = await Subscription.find(query)
+            .sort(createSortQuery(sort))
+            .skip(skip)
+            .limit(n_limit);
 
         success(res, {
             data: subscriptions,
             meta: { total, page: n_page, limit: n_limit, totalPages: Math.ceil(total / n_limit) },
-    
         });
     } catch (err) {
         next(err);
@@ -132,6 +135,12 @@ export const getSubscriptionDetail = async (req, res, next) => {
             throw error; 
         }
 
+        if (subscriptionDetail.user.toString() !== req.user.id) {
+            const error = new Error('Unauthorized: cannot access another user\'s subscription');
+            error.statusCode = 403;
+            throw error;
+        }
+
         success(res, { data: subscriptionDetail });
     } catch (err) {
         next(err);
@@ -139,22 +148,20 @@ export const getSubscriptionDetail = async (req, res, next) => {
 };
 
 export const getSubscriptions = async (req, res, next) => {
-     try {
+    try {
         const { page, limit, sort, ...filters } = req.query;
-
-        const query = createFilterQuery(filters);
-
-        const n_page = parseInt(page) || 1;
-        const n_limit = parseInt(limit) || 10;
-        const skip = (n_page - 1) * n_limit;
+        const query = { ...createFilterQuery(filters), user: req.user._id };
+        const { n_page, n_limit, skip } = parsePagination({ page, limit });
 
         const total = await Subscription.countDocuments(query);
-        const subscriptions = await Subscription.find(query).skip(skip).limit(n_limit);
+        const subscriptions = await Subscription.find(query)
+            .sort(createSortQuery(sort))
+            .skip(skip)
+            .limit(n_limit);
 
         success(res, {
             data: subscriptions,
             meta: { total, page: n_page, limit: n_limit, totalPages: Math.ceil(total / n_limit) },
-
         });
     } catch (err) {
         next(err);
@@ -164,17 +171,22 @@ export const getSubscriptions = async (req, res, next) => {
 export const cancelSubscription = async (req, res, next) => {
     try {
 
-        const newSubscription = await Subscription.findByIdAndUpdate(
-            req.params.id,
-            { $set : { payment : 'expired'}},
-            { new : true}
-        );
+        const subscription = await Subscription.findById(req.params.id);
 
-        if (!newSubscription) {
+        if (!subscription) {
             const error = new Error('No subscription with that id!');
             error.statusCode = 404;
             throw error; 
         }
+
+        if (subscription.user.toString() !== req.user.id) {
+            const error = new Error('Unauthorized: cannot cancel another user\'s subscription');
+            error.statusCode = 403;
+            throw error;
+        }
+
+        subscription.payment = 'cancelled';
+        const newSubscription = await subscription.save();
         
         success(res, { data: newSubscription });
     } catch (err) {
@@ -184,20 +196,12 @@ export const cancelSubscription = async (req, res, next) => {
 
 export const getRenewalSubscription = async (req, res, next) => {
     try {
+        const now = new Date();
+        const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-        const subscriptions = await Subscription.find();
-
-        if (!subscriptions) {
-            const error = new Error('No subscription at all!');
-            error.statusCode = 404;
-            throw error; 
-        }
-        
-        const toRenew = subscriptions.filter(subs => {
-            const now = new Date();
-            const renewal = subs.renewalDate;
-            const diffInDays = (renewal - now) / (1000 * 60 * 60 * 24);
-            return diffInDays <= 7;
+        const toRenew = await Subscription.find({
+            user: req.user._id,
+            renewalDate: { $gte: now, $lte: sevenDaysFromNow },
         });
 
         success(res, { data: toRenew });
@@ -209,16 +213,21 @@ export const getRenewalSubscription = async (req, res, next) => {
 export const removeSubscription = async (req, res, next) => {
     try {
 
-        const deleteResult = await Subscription.deleteOne({ _id : req.params.id });
-
-        if (deleteResult.deletedCount === 1) {
-            success(res, { message: 'The subscription has been deleted' });
-        } else {
+        const subscription = await Subscription.findById(req.params.id);
+        if (!subscription) {
             const error = new Error('Subscription Not Found');
             error.statusCode = 404;
             throw error;
         }
 
+        if (subscription.user.toString() !== req.user.id) {
+            const error = new Error('Unauthorized: cannot delete another user\'s subscription');
+            error.statusCode = 403;
+            throw error;
+        }
+
+        await subscription.deleteOne();
+        success(res, { message: 'The subscription has been deleted' });
 
     } catch (err) {
         next(err);
@@ -229,34 +238,45 @@ export const getSubscriptionSummary = async (req, res, next) => {
     try {
         if (req.user.id !== req.params.id) {
             const error = new Error('Incorrect user credential!');
-            error.statusCode = 401;
+            error.statusCode = 403;
             throw error;
         }
-        const userSubscription = await Subscription.find({ user: req.params.id });
-        if (!userSubscription?.length) {
-            const error = new Error('No subscription has been created yet!');
-            error.statusCode = 404;
-            throw error;
+
+        const userId = new mongoose.Types.ObjectId(req.params.id);
+
+        const [result] = await Subscription.aggregate([
+            { $match: { user: userId } },
+            {
+                $group: {
+                    _id: null,
+                    numSubscription: { $sum: 1 },
+                    totalCost: { $sum: { $toDouble: '$price' } },
+                    maxCostDoc: {
+                        $max: {
+                            $mergeObjects: [
+                                { price: { $toDouble: '$price' } },
+                                '$$ROOT',
+                            ],
+                        },
+                    },
+                },
+            },
+        ]);
+
+        if (!result) {
+            success(res, { data: { numSubscription: 0, totalCost: 0, maxCost: null } });
+            return;
         }
-        const numSubscription = userSubscription.length;
-        const totalCost = userSubscription.reduce((prev, cur) => prev + Number(cur.price), 0);
-        const maxCost = userSubscription.reduce((prev, cur) =>
-            Number(cur.price) > Number(prev.price) ? cur : prev
-        );
-        success(res, { data: { numSubscription, totalCost, maxCost } });
+
+        success(res, {
+            data: {
+                numSubscription: result.numSubscription,
+                totalCost: parseFloat(result.totalCost.toFixed(2)),
+                maxCost: result.maxCostDoc,
+            },
+        });
     } catch (err) {
         next(err);
-    
-    const numSubscription = userSubscription.length;
-    const totalCost = userSubscription.reduce((prev, cur) => prev + Number(cur.price), 0);
-    const maxCost = userSubscription.reduce((prev, cur) => {
-        return Number(cur.price) > Number(prev.price) ? cur : prev
-    });
-
-    res.status(200).send({
-        success :  true,
-        data : { numSubscription, totalCost, maxCost }
-    });
     }
 }
 
@@ -377,33 +397,39 @@ export const getSubscriptionAnalytics = async (req, res, next) => {
 export const editSubscription = async (req, res, next) => {
     try {
 
+        const subscription = await Subscription.findById(req.params.id);
+        if (!subscription) {
+            const error = new Error('No subscription with that id!');
+            error.statusCode = 404;
+            throw error; 
+        }
+
+        if (subscription.user.toString() !== req.user.id) {
+            const error = new Error('Unauthorized: cannot edit another user\'s subscription');
+            error.statusCode = 403;
+            throw error;
+        }
+
+        const ALLOWED_FIELDS = ['name', 'price', 'currency', 'frequency', 'category', 'payment', 'startDate', 'renewalDate'];
         let updateFields = {};
 
-        // Request body -> Update entry
-        for (let key in req.body) {
+        for (const key of ALLOWED_FIELDS) {
             if (req.body[key] !== undefined) {
                 updateFields[key] = req.body[key];
             }
         }
 
-        // Optional: handle case where no valid fields are provided
         if (Object.keys(updateFields).length === 0) {
             const error = new Error('No valid fields provided for the edit.');
-            error.statusCode = 400
+            error.statusCode = 400;
             throw error; 
         }
 
         const updatedSubscription = await Subscription.findByIdAndUpdate(
             req.params.id,
-            { $set : updateFields } ,
-            { new : true}
+            { $set : updateFields },
+            { new : true, runValidators: true }
         );
-
-        if (!updatedSubscription) {
-            const error = new Error('No subscription with that id!');
-            error.statusCode = 404;
-            throw error; 
-        }
         
         success(res, { statusCode: 200, data: updatedSubscription });
     } catch (err) {

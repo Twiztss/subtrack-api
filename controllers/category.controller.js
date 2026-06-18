@@ -1,17 +1,15 @@
 import Category from "../models/category.model.js";
 import Subscription from "../models/subscription.model.js";
-import { createFilterQuery, createSortQuery } from "../utils/filter.js";
+import { createCategoryFilterQuery, createSortQuery } from "../utils/filter.js";
+import { parsePagination } from "../utils/pagination.js";
 import { success } from "../utils/response.js";
 
 export const getCategories = async (req, res, next) => {
     try {
         const { page, limit, sort, ...filters } = req.query;
 
-        const query = createFilterQuery(filters);
-
-        const n_page = parseInt(page) || 1;
-        const n_limit = parseInt(limit) || 10;
-        const skip = (n_page - 1) * n_limit;
+        const query = createCategoryFilterQuery(filters);
+        const { n_page, n_limit, skip } = parsePagination({ page, limit });
 
         const total = await Category.countDocuments(query);
         const categories = await Category.find(query)
@@ -123,7 +121,7 @@ export const deleteCategory = async (req, res, next) => {
 
         // Check if category is being used by any subscriptions
         const subscriptionCount = await Subscription.countDocuments({ 
-            categories: id 
+            category: id 
         });
 
         if (subscriptionCount > 0) {

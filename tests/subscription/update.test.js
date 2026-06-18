@@ -252,7 +252,7 @@ describe('PUT /api/v1/subscription/:id/cancel - Cancel Subscription', () => {
 
   // ── Smoke Tests ────────────────────────────────────────────────────────────
 
-  it('should cancel an active subscription and set payment to expired', async () => {
+  it('should cancel an active subscription and set payment to cancelled', async () => {
     // Arrange
     const sub = await createTestSubscription(commonSubscriptions.spotify);
     expect(sub.payment).toBe('active');
@@ -266,7 +266,7 @@ describe('PUT /api/v1/subscription/:id/cancel - Cancel Subscription', () => {
 
     // Assert
     expect(response.body.success).toBe(true);
-    expect(response.body.data.payment).toBe('expired');
+    expect(response.body.data.payment).toBe('cancelled');
   });
 
   it('should return the full subscription document in the response', async () => {
@@ -282,7 +282,7 @@ describe('PUT /api/v1/subscription/:id/cancel - Cancel Subscription', () => {
     // Assert: full document is present, not just a confirmation message
     expect(response.body.data).toHaveProperty('_id');
     expect(response.body.data).toHaveProperty('name');
-    expect(response.body.data).toHaveProperty('payment', 'expired');
+    expect(response.body.data).toHaveProperty('payment', 'cancelled');
   });
 
   // ── DB Integration ─────────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ describe('PUT /api/v1/subscription/:id/cancel - Cancel Subscription', () => {
 
     // Assert: DB document reflects the cancellation
     const dbDoc = await Subscription.findById(sub._id);
-    expect(dbDoc.payment).toBe('expired');
+    expect(dbDoc.payment).toBe('cancelled');
   });
 
   it('should not affect other subscriptions when cancelling one', async () => {

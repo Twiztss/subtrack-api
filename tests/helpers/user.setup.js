@@ -131,3 +131,20 @@ export const createTestUser = async (data = {}) => {
 export const createTestUsers = async (usersData) => {
   return await User.insertMany(usersData);
 };
+
+/**
+ * Insert a User document and return both the document and a signed JWT for it.
+ * Use this in tests that need to act as a specific user (e.g. self-delete/edit).
+ *
+ * @param {Object} data - Fields to merge over the defaults
+ * @returns {Promise<{ user: import('mongoose').Document, token: string }>}
+ */
+export const createAuthenticatedUser = async (data = {}) => {
+  const user = await createTestUser(data);
+  const token = jwt.sign(
+    { userId: user._id },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+  return { user, token };
+};

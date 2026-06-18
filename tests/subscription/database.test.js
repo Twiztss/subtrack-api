@@ -5,6 +5,10 @@
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import Subscription from '../../models/subscription.model.js';
+
+// Use dynamic dates so the pre-save hook never auto-expires test subscriptions
+const futureStart = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+const futureRenewal = () => new Date(Date.now() + 335 * 24 * 60 * 60 * 1000);
 import {
   setupTests,
   teardownTests,
@@ -39,7 +43,8 @@ afterAll(async () => {
  */
 describe('Subscription Model - Database Integration', () => {
   it('should save subscription with all fields to MongoDB', async () => {
-    // Arrange: Complete subscription data
+    // Arrange: Complete subscription data — use future dates so the pre-save hook
+    // does not auto-expire the subscription before we can assert on it.
     const subscriptionData = {
       name: 'Spotify',
       price: '9.99',
@@ -47,8 +52,8 @@ describe('Subscription Model - Database Integration', () => {
       frequency: 'monthly',
       category: testContext.testCategory._id,
       payment: 'active',
-      startDate: new Date('2026-02-01'),
-      renewalDate: new Date('2026-03-15'),
+      startDate: futureStart(),
+      renewalDate: futureRenewal(),
       user: testContext.testUser._id,
     };
 
@@ -76,8 +81,8 @@ describe('Subscription Model - Database Integration', () => {
       price: '9.99',
       category: testContext.testCategory._id,
       frequency: 'monthly',
-      startDate: new Date('2026-02-01'),
-      renewalDate: new Date('2026-03-15'),
+      startDate: futureStart(),
+      renewalDate: futureRenewal(),
       user: testContext.testUser._id,
     });
 
@@ -111,8 +116,8 @@ describe('Subscription Model - Database Integration', () => {
       price: '  9.99  ',
       category: testContext.testCategory._id,
       frequency: 'monthly',
-      startDate: new Date('2026-02-01'),
-      renewalDate: new Date('2026-03-15'),
+      startDate: futureStart(),
+      renewalDate: futureRenewal(),
       user: testContext.testUser._id,
     };
 
@@ -131,8 +136,8 @@ describe('Subscription Model - Database Integration', () => {
       price: '9.99',
       category: testContext.testCategory._id,
       frequency: 'monthly',
-      startDate: new Date('2026-02-01'),
-      renewalDate: new Date('2026-03-15'),
+      startDate: futureStart(),
+      renewalDate: futureRenewal(),
       user: testContext.testUser._id,
     });
 
@@ -175,13 +180,15 @@ describe('Subscription Model - Database Integration', () => {
   });
 
   it('should set default values for optional fields', async () => {
-    // Arrange: Minimal subscription data (only required fields)
+    // Arrange: Minimal subscription data (only required fields).
+    // startDate must be recent so the auto-calculated renewalDate (startDate + 30 days)
+    // falls in the future; otherwise the pre-save hook marks payment as "expired".
     const minimalData = {
       name: 'Spotify',
       price: '9.99',
       category: testContext.testCategory._id,
       frequency: 'monthly',
-      startDate: new Date('2026-02-01'),
+      startDate: new Date(Date.now() - 24 * 60 * 60 * 1000), // yesterday → auto-calc renewalDate = yesterday + 30 days (29 days from now)
       user: testContext.testUser._id,
     };
 
@@ -200,8 +207,8 @@ describe('Subscription Model - Database Integration', () => {
       price: '9.99',
       category: testContext.testCategory._id,
       frequency: 'monthly',
-      startDate: new Date('2026-02-01'),
-      renewalDate: new Date('2026-03-15'),
+      startDate: futureStart(),
+      renewalDate: futureRenewal(),
       user: testContext.testUser._id,
     });
 
@@ -223,7 +230,8 @@ describe('Subscription Model - Database Integration', () => {
       price: '9.99',
       category: testContext.testCategory._id,
       frequency: 'monthly',
-      startDate: new Date('2026-02-01'),
+      startDate: futureStart(),
+      renewalDate: futureRenewal(),
       user: testContext.testUser._id,
     });
 

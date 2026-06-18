@@ -3,17 +3,19 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { convertCurrency } from '../../utils/currency.js';
+import { convertCurrency, clearRateCache } from '../../utils/currency.js';
 
 describe('utils/currency — convertCurrency', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     globalThis.fetch = vi.fn();
+    clearRateCache(); // prevent cached rates from leaking between tests
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    clearRateCache();
   });
 
   it('returns the same amount when from and to are identical (no fetch)', async () => {

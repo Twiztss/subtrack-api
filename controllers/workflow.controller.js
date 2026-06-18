@@ -12,7 +12,7 @@ export const sendReminders = serve(async (context) => {
     const { subscriptionId } = context.requestPayload; // Pass ID to workflow
     const subscription = await fetchSubscription(context, subscriptionId);
 
-    if (!subscription || subscription.status !== 'active') {
+    if (!subscription || subscription.payment !== 'active') {
         return;
     }
 
@@ -57,7 +57,7 @@ const triggerReminder = async (context, label, subscription, days) => {
         // Send email with dynamic daysLeft and label
         await sendReminderEmail({
             to: subscription.user.email,
-            userName : 'User',
+            userName : subscription.user.name,
             type: label,
             subscription,
             customLabel: label.includes('late') ? `${days} days before reminder (late)` : undefined,

@@ -4,7 +4,7 @@ import { success } from "../utils/response.js";
 
 export const getUsers = async (req, res, next) => {
     try {
-        const users = await User.find();
+        const users = await User.find().select('-password');
         success(res, { data: users });
         
     } catch (err) {
@@ -31,38 +31,44 @@ export const getUser = async (req, res, next) => {
 
 export const editUser = async (req, res, next) => {
     try {
+        if (req.user.id !== req.params.id) {
+            const error = new Error('Unauthorized: cannot edit another user');
+            error.statusCode = 403;
+            throw error;
+        }
 
+        const ALLOWED_FIELDS = ['name', 'email', 'password'];
         let updateFields = {};
 
-        const user = await User.findById(req.params.id);
-
-        // Request body -> Update entry
-        for (let key in req.body) {
+        for (const key of ALLOWED_FIELDS) {
             if (req.body[key] !== undefined) {
                 updateFields[key] = req.body[key];
             }
         }
 
-        // Optional: handle case where no valid fields are provided
         if (Object.keys(updateFields).length === 0) {
             const error = new Error('No valid fields provided for the edit.');
             error.statusCode = 400;
             throw error; 
         }
 
-        // Re-hash password
         if (updateFields.password) {
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(updateFields.password, salt);
-
-            const isDuplicate = await bcrypt.compare(updateFields.password, user.password)
-            if (isDuplicate) {
-                const error = new Error('Password must not be the same.');
-                error.statusCode = 401;
+            const user = await User.findById(req.params.id).select('+password');
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
                 throw error;
             }
 
-            updateFields.password = hashedPassword;
+            const isDuplicate = await bcrypt.compare(updateFields.password, user.password);
+            if (isDuplicate) {
+                const error = new Error('Password must not be the same as the current password.');
+                error.statusCode = 400;
+                throw error;
+            }
+
+            const salt = await bcrypt.genSalt(10);
+            updateFields.password = await bcrypt.hash(updateFields.password, salt);
         }
 
         // runValidators: true ensures schema constraints (minLength, maxLength, etc.)
@@ -71,7 +77,7 @@ export const editUser = async (req, res, next) => {
             req.params.id,
             { $set : updateFields},
             { new : true, runValidators: true }
-        );
+        ).select('-password');
 
         if (!updatedUser) {
             const error = new Error('User not found');
@@ -88,6 +94,11 @@ export const editUser = async (req, res, next) => {
 
 export const removeUser = async (req, res, next) => {
     try {
+        if (req.user.id !== req.params.id) {
+            const error = new Error('Unauthorized: cannot delete another user');
+            error.statusCode = 403;
+            throw error;
+        }
 
         const deleteResult = await User.deleteOne({ _id : req.params.id });
 

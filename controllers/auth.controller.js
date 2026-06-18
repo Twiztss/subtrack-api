@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import User from "../models/user.model.js";
 import jwt from 'jsonwebtoken';
 import bcrypt from "bcryptjs";
@@ -6,12 +5,8 @@ import { JWT_EXPIRES_IN, JWT_SECRET } from "../config/env.js";
 import { success } from "../utils/response.js";
 
 export const signUp = async (req, res, next) => {
-    // Sign Up Logic
-    const session = await mongoose.startSession();      // Start mongoose sessions (atomic operation)
-    session.startTransaction();
-
     try {
-        const  { name, email, password } = req.body;
+        const { name, email, password } = req.body;
 
         // Guard: ensure all required fields are present before any async work.
         // Without this, bcrypt.hash(undefined) throws a TypeError (→ 500) and
@@ -42,17 +37,12 @@ export const signUp = async (req, res, next) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Create new user (document) on database
-        const newUsers = await User.create([{ name, email, password : hashedPassword}], { runValidators: true, session });
-        const token = jwt.sign({ userId : newUsers[0].id }, JWT_SECRET, { expiresIn : JWT_EXPIRES_IN || '1h' });
-
-        await session.commitTransaction();
-        session.endSession();
+        // Create new user document (validators always run on create, no extra options needed)
+        const newUser = await User.create({ name, email, password: hashedPassword });
+        const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN || '1h' });
 
         // Exclude the hashed password from the response payload.
-        // newUsers[0] is a Mongoose document; toObject() gives a plain JS object
-        // so we can safely destructure the password out before sending.
-        const { password: _pw, ...userWithoutPassword } = newUsers[0].toObject();
+        const { password: _pw, ...userWithoutPassword } = newUser.toObject();
 
         success(res, {
             statusCode: 201,
@@ -60,49 +50,46 @@ export const signUp = async (req, res, next) => {
             data: { token, user: userWithoutPassword },
         });
 
-     } catch (err) {
-        await session.abortTransaction();
-        session.endSession();
+    } catch (err) {
         next(err);
-     }
+    }
 }
 
 export const signIn = async (req, res, next) => {
-    // Sign In Logic
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    
     try {
         const { email, password } = req.body;
-        
-        const user = await User.findOne({ email });
-        
+
+        if (!email || !password) {
+            const error = new Error('Email and password are required');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const user = await User.findOne({ email }).select('+password');
+
         if (!user) {
-            const error = new Error('User not found');
-            error.statusCode = 404;
+            const error = new Error('Invalid email or password');
+            error.statusCode = 401;
             throw error;
         }
         
         const isPasswordValid = await bcrypt.compare(password, user.password);
         
         if (!isPasswordValid) {
-            const error = new Error('Invalid password');
+            const error = new Error('Invalid email or password');
             error.statusCode = 401;
             throw error;
         }
 
         const token = jwt.sign({ userId : user._id }, JWT_SECRET, { expiresIn : JWT_EXPIRES_IN });
+
+        const { password: _pw, ...userWithoutPassword } = user.toObject();
         success(res, {
             message: 'User signed in successfully',
-            data: { token, user },
+            data: { token, user: userWithoutPassword },
         });
 
-        await session.commitTransaction();
-        session.endSession();
-
     } catch (err) {
-        await session.abortTransaction();
-        session.endSession();
         next(err);
     }
 }

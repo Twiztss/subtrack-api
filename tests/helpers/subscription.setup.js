@@ -118,8 +118,8 @@ export const createTestSubscription = async (data = {}) => {
     price: '9.99',
     category: testContext.testCategory._id,
     frequency: 'monthly',
-    startDate: new Date('2026-02-01'),
-    renewalDate: new Date('2026-03-01'),
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),   // 30 days ago
+    renewalDate: new Date(Date.now() + 335 * 24 * 60 * 60 * 1000), // ~11 months ahead
     user: testContext.testUser._id,
   };
 

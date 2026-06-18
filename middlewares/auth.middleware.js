@@ -22,7 +22,7 @@ const authorize = async (req, res, next) => {
         // Decode JWT token
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        const user = await User.findById(decoded.userId);
+        const user = await User.findById(decoded.userId).select('-password');
         
         if (!user) { 
             const error = new Error('User not found');

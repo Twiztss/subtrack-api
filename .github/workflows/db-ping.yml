@@ -29,6 +29,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Atlas secrets
+        run: |
+          missing=()
+          [ -z "$MONGODB_ATLAS_PUBLIC_API_KEY" ]  && missing+=("MONGODB_ATLAS_PUBLIC_API_KEY")
+          [ -z "$MONGODB_ATLAS_PRIVATE_API_KEY" ] && missing+=("MONGODB_ATLAS_PRIVATE_API_KEY")
+          [ -z "$MONGODB_ATLAS_PROJECT_ID" ]      && missing+=("MONGODB_ATLAS_PROJECT_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required secrets: ${missing[*]}"
+            echo "Add them under Settings → Secrets and variables → Actions in your repository."
+            exit 1
+          fi
+          echo "All Atlas secrets are present."
+
       - name: Setup Atlas CLI
         uses: mongodb/atlas-github-action@v0.2.0
 

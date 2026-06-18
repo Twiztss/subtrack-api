@@ -2,7 +2,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
-import { PORT, NODE_ENV } from './config/env.js';
+import { PORT, NODE_ENV, ENABLE_ARCJET } from './config/env.js';
 import process from 'process';
 
 // Router Import
@@ -15,6 +15,7 @@ import categoryRouter from './routes/category.js';
 
 // Middlewares
 import errorHandler from './middlewares/error.middleware.js';
+import arcjetMiddleware from './middlewares/arcjet.middleware.js';
 
 /**
  * Create and configure Express application
@@ -28,19 +29,17 @@ export function createApp() {
   else if (NODE_ENV === 'production') { app.use(logger('combined')); }
   else if (NODE_ENV !== 'test') { console.log('Logging is disabled in', NODE_ENV); }
 
-  // For logging in non-production environments
-  if (process.env.NODE_ENV !== "production") {
-    app.use((req, res, next) => {
-      const spoofedIp = `203.0.113.${Math.floor(Math.random() * 100)}`;
-      req.headers["x-forwarded-for"] = spoofedIp;
-      next();
-    });
-  }
-
   app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
-  app.set('trust proxy', true);
+  // Trust exactly one upstream proxy hop (e.g. a load balancer / reverse proxy).
+  // Using `true` would trust all X-Forwarded-For headers including client-supplied ones.
+  app.set('trust proxy', 1);
   app.use(express.json());
+
+  // Rate limiting, bot detection, and shield protection via Arcjet (opt-in)
+  if (NODE_ENV !== 'test' && ENABLE_ARCJET === 'true') {
+    app.use(arcjetMiddleware);
+  }
 
   app.use('/', indexRouter);
   app.use('/api/v1/user', userRouter);

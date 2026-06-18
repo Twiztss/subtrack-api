@@ -21,6 +21,7 @@ import {
   cleanupExtraUsers,
   createTestUser,
   testContext,
+  getAuthHeaders,
 } from '../helpers/user.setup.js';
 import {
   commonUsers,
@@ -41,11 +42,11 @@ afterAll(async () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/v1/user  –  list all users
+// GET /api/v1/user  –  list all users (auth required)
 // ─────────────────────────────────────────────────────────────────────────────
 describe('GET /api/v1/user - Retrieve All Users', () => {
 
-  it('should return 200 and an array of users', async () => {
+  it('should return 200 and an array of users when authenticated', async () => {
     // Arrange: add two extra users so there are at least three total
     await createTestUser(commonUsers.alice);
     await createTestUser(commonUsers.bob);
@@ -53,6 +54,7 @@ describe('GET /api/v1/user - Retrieve All Users', () => {
     // Act
     const response = await request(app)
       .get('/api/v1/user')
+      .set(getAuthHeaders())
       .expect('Content-Type', /json/)
       .expect(200);
 
@@ -65,38 +67,39 @@ describe('GET /api/v1/user - Retrieve All Users', () => {
   });
 
   it('should return at least one user when the baseline test user exists', async () => {
-    // Arrange: only testContext.testUser is present (afterEach cleans extras)
     const response = await request(app)
       .get('/api/v1/user')
+      .set(getAuthHeaders())
       .expect(200);
 
     expect(response.body.success).toBe(true);
     expect(response.body.data.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should be accessible without an authorization token', async () => {
-    // The route is intentionally public: no authorize middleware
+  it('should return 401 when no authorization token is provided', async () => {
     const response = await request(app)
       .get('/api/v1/user')
-      .expect(200);
+      .expect(401);
 
-    expect(response.body.success).toBe(true);
+    expect(response.body.success).toBe(false);
   });
 
-  it('should include core user fields in each returned document', async () => {
+  it('should include core user fields and exclude password in each returned document', async () => {
     // Arrange
     await createTestUser(commonUsers.charlie);
 
     // Act
     const response = await request(app)
       .get('/api/v1/user')
+      .set(getAuthHeaders())
       .expect(200);
 
-    // Assert: every object in the array has at least _id, name, email
+    // Assert: every object in the array has at least _id, name, email and no password
     response.body.data.forEach((user) => {
       expect(user).toHaveProperty('_id');
       expect(user).toHaveProperty('name');
       expect(user).toHaveProperty('email');
+      expect(user).not.toHaveProperty('password');
     });
   });
 });

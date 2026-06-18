@@ -107,8 +107,8 @@ describe('POST /api/v1/auth/sign-up - User Registration', () => {
       .send(userData)
       .expect(201);
 
-    // Fetch the raw record to inspect the stored password
-    const savedUser = await User.findById(response.body.data.user._id);
+    // Fetch the raw record with password explicitly selected (select:false by default)
+    const savedUser = await User.findById(response.body.data.user._id).select('+password');
 
     // Assert: stored value is a bcrypt hash, not the original plain text
     expect(savedUser.password).not.toBe(plainPassword);

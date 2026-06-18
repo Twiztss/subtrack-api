@@ -85,8 +85,8 @@ describe('GET /api/v1/subscription/user/:id/analytics', () => {
       price: '120.00',
       frequency: 'yearly',
       category: saasCategory._id,
-      startDate: new Date('2026-01-01'),
-      renewalDate: new Date('2027-01-01'),
+      startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      renewalDate: new Date(Date.now() + 335 * 24 * 60 * 60 * 1000),
       user: testContext.testUser._id,
     });
 
@@ -126,8 +126,8 @@ describe('GET /api/v1/subscription/user/:id/analytics', () => {
       price: '10.00',
       frequency: 'monthly',
       category: saasCategory._id,
-      startDate: new Date('2026-01-01'),
-      renewalDate: new Date('2026-02-01'),
+      startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      renewalDate: new Date(Date.now() + 335 * 24 * 60 * 60 * 1000),
       user: testContext.testUser._id,
     });
 
@@ -216,8 +216,8 @@ describe('GET /api/v1/subscription/user/:id/analytics', () => {
       price: '50.00',
       frequency: 'monthly',
       category: testContext.testCategory._id,
-      startDate: new Date('2026-01-01'),
-      renewalDate: new Date('2026-02-01'),
+      startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      renewalDate: new Date(Date.now() + 335 * 24 * 60 * 60 * 1000),
       user: otherUser._id,
     });
 

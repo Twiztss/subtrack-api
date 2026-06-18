@@ -10,30 +10,33 @@
  *
  * Do NOT import this file directly from test files.
  *
- * NOTE: MongoMemoryReplSet (single-node replica set) is used instead of the
- * standalone MongoMemoryServer because several controllers use mongoose
- * sessions and multi-document transactions, which MongoDB only supports on
- * replica set members.
+ * NOTE: A standalone MongoMemoryServer is used (not a replica set) because
+ * no controller uses multi-document transactions; every write is a single,
+ * already-atomic operation.  The replica-set approach caused 30s server-
+ * selection timeouts on Windows because the single-node set never elected a
+ * usable primary for transactions.
  */
 
 import mongoose from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 
 let mongoServer;
 
 /**
- * Spin up an in-memory replica set and connect Mongoose to it.
+ * Spin up a standalone in-memory MongoDB and connect Mongoose to it.
  * Should be called by suite-specific setupTests() inside a `beforeAll` hook.
  */
 export const setupDatabase = async () => {
-  mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  mongoServer = await MongoMemoryServer.create();
   const mongoUri = mongoServer.getUri();
 
   if (mongoose.connection.readyState !== 0) {
     await mongoose.disconnect();
   }
 
-  await mongoose.connect(mongoUri);
+  // serverSelectionTimeoutMS: 5000 ensures any future connection problems
+  // fail fast rather than hanging for the 30s MongoDB default.
+  await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
 };
 
 /**
