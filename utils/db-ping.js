@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
-import { DB_URI, NODE_ENV } from "../config/env.js";
 import Subscription from "../models/subscription.model.js";
+
+// Standalone script: read env directly instead of importing config/env.js, which
+// runs fail-fast validation for app secrets (e.g. JWT_SECRET) this job does not need.
+const DB_URI = process.env.DB_URI;
+const NODE_ENV = process.env.NODE_ENV || "development";
 
 const pingDatabase = async () => {
   if (!DB_URI) {
