@@ -37,6 +37,7 @@ export const setupDatabase = async () => {
   // serverSelectionTimeoutMS: 5000 ensures any future connection problems
   // fail fast rather than hanging for the 30s MongoDB default.
   await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
+  await mongoose.connection.syncIndexes();
 };
 
 /**

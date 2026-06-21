@@ -2,6 +2,18 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    env: {
+      NODE_ENV: 'test',
+      JWT_SECRET: 'test-jwt-secret',
+      JWT_EXPIRES_IN: '1h',
+      ENABLE_ARCJET: 'false',
+      ENABLE_WORKFLOW: 'false',
+      QSTASH_URL: 'https://qstash.example.test',
+      QSTASH_TOKEN: 'test-qstash-token',
+      QSTASH_CURRENT_SIGNING_KEY: 'test-current-signing-key',
+      QSTASH_NEXT_SIGNING_KEY: 'test-next-signing-key',
+    },
+
     // Test environment
     environment: 'node',
     

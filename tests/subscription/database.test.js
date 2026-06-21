@@ -212,7 +212,9 @@ describe('Subscription Model - Database Integration', () => {
       user: testContext.testUser._id,
     });
 
-    // Act: Update subscription
+    // Act: Update subscription. Wait briefly so timestamp precision cannot
+    // collapse createdAt and updatedAt into the same millisecond.
+    await new Promise((resolve) => setTimeout(resolve, 5));
     subscription.price = '12.99';
     subscription.name = 'Spotify Premium';
     const updated = await subscription.save();

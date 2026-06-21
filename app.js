@@ -1,9 +1,9 @@
 // ESM Import
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import logger from 'morgan';
 import { PORT, NODE_ENV, ENABLE_ARCJET } from './config/env.js';
-import process from 'process';
 
 // Router Import
 import indexRouter from './routes/index.js';
@@ -24,17 +24,20 @@ import arcjetMiddleware from './middlewares/arcjet.middleware.js';
 export function createApp() {
   const app = express();
 
+  app.disable('x-powered-by');
+  app.use(helmet());
+
   // Logging Middleware
   if (NODE_ENV === 'development') { app.use(logger('dev')); }
   else if (NODE_ENV === 'production') { app.use(logger('combined')); }
   else if (NODE_ENV !== 'test') { console.log('Logging is disabled in', NODE_ENV); }
 
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 100 }));
   app.use(cookieParser());
   // Trust exactly one upstream proxy hop (e.g. a load balancer / reverse proxy).
   // Using `true` would trust all X-Forwarded-For headers including client-supplied ones.
   app.set('trust proxy', 1);
-  app.use(express.json());
+  app.use(express.json({ limit: '64kb' }));
 
   // Rate limiting, bot detection, and shield protection via Arcjet (opt-in)
   if (NODE_ENV !== 'test' && ENABLE_ARCJET === 'true') {
