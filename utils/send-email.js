@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import { generateEmailTemplate, generateReminderSubject } from "./email-template.js";
 import { accountEmail, transporter } from "../config/nodemailer.js";
+import { NODE_ENV } from "../config/env.js";
 
 export const sendReminderEmail = async ({ to, userName, type, subscription, customLabel }) => {
     if (!to || !type) { throw new Error('Missing required parameters.'); }
@@ -43,7 +44,9 @@ export const sendReminderEmail = async ({ to, userName, type, subscription, cust
                 console.error('Error sending email:', err);
                 return reject(err);
             }
-            console.log('Email sent:', info.response);
+            if (NODE_ENV !== 'test') {
+                console.log('Email sent:', info.response);
+            }
             resolve(info);
         });
     });

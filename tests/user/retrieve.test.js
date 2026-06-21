@@ -210,7 +210,7 @@ describe('GET /api/v1/user/:id - Retrieve Single User', () => {
       .expect(401);
 
     expect(response.body.success).toBe(false);
-    expect(response.body.message).toBe('jwt malformed');
+    expect(response.body.message).toBe('Unauthorized');
   });
 
   // ── Boundary Tests ─────────────────────────────────────────────────────────
